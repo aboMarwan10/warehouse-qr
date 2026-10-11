@@ -44,8 +44,8 @@ Two kinds of users:
 
 ## Owner (admin) features
 
-- Login with password reset by email; automatic logout after 2 hours idle; installable as a phone
-  app.
+- Login with password reset by email; stays logged in (no automatic logout when idle);
+  installable as a phone app.
 - **Dashboard**: the shop QR code (download / print), counts of products and pending orders.
 - **Categories**: add, rename, delete, drag to reorder, tile image.
 - **Subcategories card** (one place for everything about subcategories and arrangement): pick a

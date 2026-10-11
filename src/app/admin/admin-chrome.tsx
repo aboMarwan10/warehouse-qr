@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import { AdminNav } from "./admin-nav";
-import { IdleLogout } from "./idle-logout";
 import { BackToTop } from "@/components/back-to-top";
 
 export function AdminChrome({ children }: { children: React.ReactNode }) {
@@ -13,7 +12,6 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       {!isLoggedOutPage && <AdminNav />}
-      {!isLoggedOutPage && <IdleLogout />}
       {children}
       {/* Raised so it clears the products page's bulk-action bar. */}
       {!isLoggedOutPage && <BackToTop bottomClass="bottom-20" />}

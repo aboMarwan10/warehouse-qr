@@ -132,8 +132,8 @@ error is returned so the admin can see it. Keep that non-blocking behaviour.
 ### Admin (`src/app/admin/`)
 
 NextAuth Credentials, JWT sessions (`src/lib/auth.ts`). `src/middleware.ts` protects `/admin` and
-everything under it except login, forgot/reset password and the app icons. `idle-logout.tsx` signs
-out after 2 hours without activity (shared across tabs via localStorage). Pages: dashboard (QR
+everything under it except login, forgot/reset password and the app icons. There is no idle
+logout (removed at the owner's request); sessions last NextAuth's default 30 days. Pages: dashboard (QR
 code to `NEXT_PUBLIC_SITE_URL`, counts), products (categories with images and drag order;
 subcategories card = add/delete/drag subcategories, arrange products per subcategory, bulk
 stock/move/delete/merge/unmerge; product list with search, category filter, low-stock filter, edit

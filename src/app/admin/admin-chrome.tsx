@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AdminNav } from "./admin-nav";
+import { BackButton } from "@/components/back-button";
 import { BackToTop } from "@/components/back-to-top";
 
 export function AdminChrome({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export function AdminChrome({ children }: { children: React.ReactNode }) {
       {children}
       {/* Raised so it clears the products page's bulk-action bar. */}
       {!isLoggedOutPage && <BackToTop bottomClass="bottom-20" />}
+      {!isLoggedOutPage && <BackButton homeHref="/admin" bottomClass="bottom-20" />}
     </>
   );
 }

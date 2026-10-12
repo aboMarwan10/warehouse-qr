@@ -13,6 +13,7 @@ export const dictionaries = {
       payLater: "תשלום מאוחר",
       signOut: "התנתקות",
       backToTop: "חזרה לראש העמוד",
+      back: "חזרה לעמוד הקודם",
       viewStore: "צפייה בחנות",
     },
     catalog: {
@@ -406,6 +407,7 @@ export const dictionaries = {
       payLater: "الدفع المؤخر",
       signOut: "تسجيل الخروج",
       backToTop: "العودة إلى أعلى الصفحة",
+      back: "العودة إلى الصفحة السابقة",
       viewStore: "عرض المتجر",
     },
     catalog: {

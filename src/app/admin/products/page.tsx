@@ -6,6 +6,7 @@ import { ImageUploadField } from "@/components/image-upload-field";
 import { ActionsMenu } from "./actions-menu";
 import { CategoryList } from "./category-list";
 import { UnitStockFields, parseStockInput } from "./unit-stock-fields";
+import { ProductImagesField } from "./product-images-field";
 import { VariantOptionsSection } from "./variant-options-section";
 import { ProductOrderSection } from "./product-order-list";
 import { ChevronDownIcon, DuplicateIcon, EditIcon, PackageIcon, TrashIcon } from "@/components/icons";
@@ -35,6 +36,7 @@ type Product = {
   description: string | null;
   price: number;
   imageUrl: string | null;
+  images: string[];
   inStock: boolean;
   sortOrder: number;
   unit: string;
@@ -143,6 +145,7 @@ export default function AdminProductsPage() {
   const [unit, setUnit] = useState<string>(PRODUCT_UNIT.UNIT);
   const [stock, setStock] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [images, setImages] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [subcategoryId, setSubcategoryId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +170,7 @@ export default function AdminProductsPage() {
   const [editUnit, setEditUnit] = useState<string>(PRODUCT_UNIT.UNIT);
   const [editStock, setEditStock] = useState("");
   const [editImageUrl, setEditImageUrl] = useState("");
+  const [editImages, setEditImages] = useState<string[]>([]);
   const [editOnSale, setEditOnSale] = useState(false);
   const [editSaleMode, setEditSaleMode] = useState<"amount" | "percent">("amount");
   const [editSalePrice, setEditSalePrice] = useState("");
@@ -358,6 +362,7 @@ export default function AdminProductsPage() {
         description: description || undefined,
         price: parsedPrice,
         imageUrl: imageUrl || undefined,
+        images,
         categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
         subcategoryId: subcategoryId || undefined,
         unit,
@@ -375,6 +380,7 @@ export default function AdminProductsPage() {
     setPrice("");
     setStock("");
     setImageUrl("");
+    setImages([]);
     setCategoryIds([]);
     setSubcategoryId("");
     toast(t("admin.products.toastAdded"));
@@ -398,6 +404,7 @@ export default function AdminProductsPage() {
         description: product.description || undefined,
         price: product.price,
         imageUrl: product.imageUrl || undefined,
+        images: product.images,
         inStock: product.inStock,
         unit: product.unit,
         categoryIds: product.categories.map((category) => category.id),
@@ -425,6 +432,7 @@ export default function AdminProductsPage() {
     setEditUnit(product.unit);
     setEditStock(product.stockQuantity != null ? String(product.stockQuantity) : "");
     setEditImageUrl(product.imageUrl ?? "");
+    setEditImages(product.images ?? []);
     setEditOnSale(product.onSale);
     setEditSaleMode("amount");
     setEditSalePrice(product.salePrice != null ? String(product.salePrice) : "");
@@ -494,7 +502,8 @@ export default function AdminProductsPage() {
         name: editName,
         description: editDescription || undefined,
         price: parsedPrice,
-        imageUrl: editImageUrl || undefined,
+        imageUrl: editImageUrl || null,
+        images: editImages,
         onSale: editOnSale,
         salePrice: editOnSale ? parsedSalePrice : null,
         saleBannerImageUrl: editOnSale ? editSaleBannerImageUrl || null : null,
@@ -808,20 +817,15 @@ export default function AdminProductsPage() {
                 className="w-full border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
               />
               <UnitStockFields unit={unit} onUnitChange={setUnit} stock={stock} onStockChange={setStock} />
+              <ProductImagesField
+                main={imageUrl}
+                extras={images}
+                onChange={(main, extras) => {
+                  setImageUrl(main);
+                  setImages(extras);
+                }}
+              />
               <div className="flex items-center gap-3.5 flex-wrap">
-                <ImageUploadField
-                  value={imageUrl}
-                  onChange={setImageUrl}
-                  uploadLabel={t("admin.products.uploadImage")}
-                  uploadingLabel={t("admin.products.uploading")}
-                  hintText={t("admin.products.uploadHint")}
-                  errorMessages={{
-                    notImage: t("admin.products.uploadErrorNotImage"),
-                    tooLarge: t("admin.products.uploadErrorTooLarge"),
-                    network: t("admin.products.uploadErrorNetwork"),
-                    generic: t("admin.products.uploadErrorGeneric"),
-                  }}
-                />
                 <button
                   type="submit"
                   className="ms-auto bg-[var(--accent)] text-white rounded-[10px] px-5 py-2.5 text-sm font-semibold"
@@ -1172,17 +1176,12 @@ export default function AdminProductsPage() {
                   />
                 </div>
               )}
-              <ImageUploadField
-                value={editImageUrl}
-                onChange={setEditImageUrl}
-                uploadLabel={t("admin.products.uploadImage")}
-                uploadingLabel={t("admin.products.uploading")}
-                hintText={t("admin.products.uploadHint")}
-                errorMessages={{
-                  notImage: t("admin.products.uploadErrorNotImage"),
-                  tooLarge: t("admin.products.uploadErrorTooLarge"),
-                  network: t("admin.products.uploadErrorNetwork"),
-                  generic: t("admin.products.uploadErrorGeneric"),
+              <ProductImagesField
+                main={editImageUrl}
+                extras={editImages}
+                onChange={(main, extras) => {
+                  setEditImageUrl(main);
+                  setEditImages(extras);
                 }}
               />
               <span className="block text-xs font-semibold text-[#6b6259] mb-1">{t("admin.products.colCategory")}</span>

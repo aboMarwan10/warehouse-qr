@@ -62,7 +62,11 @@ model Product {
   name          String
   description   String?
   price         Float
+  // The main photo (shown on the card, in the cart, the PDF and the admin).
   imageUrl      String?
+  // Secondary photos, in order, shown after the main one in the shop's
+  // details window. The admin picks which photo is main; the rest live here.
+  images        String[]     @default([])
   inStock       Boolean      @default(true)
   onSale        Boolean      @default(false)
   // Position chosen by the admin ("arrange products"); category pages list

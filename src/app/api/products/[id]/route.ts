@@ -10,7 +10,10 @@ const updateProductSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   price: z.number().positive().optional(),
-  imageUrl: z.string().url().optional(),
+  // null removes the main photo (the owner removed every photo).
+  imageUrl: z.string().url().nullable().optional(),
+  /** Secondary photos, in order (the main one is imageUrl). */
+  images: z.array(z.string().url()).max(8).optional(),
   inStock: z.boolean().optional(),
   onSale: z.boolean().optional(),
   salePrice: z.number().positive().nullable().optional(),

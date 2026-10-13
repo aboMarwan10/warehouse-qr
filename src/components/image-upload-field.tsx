@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { PackageIcon } from "@/components/icons";
 import { optimizedImage } from "@/lib/image-url";
-import { shrinkImage } from "@/lib/shrink-image";
+import { uploadImage } from "@/lib/upload-image";
 
 type ErrorMessages = {
   notImage: string;
@@ -38,6 +38,8 @@ export function ImageUploadField({
         return errorMessages.notImage;
       case "too_large":
         return errorMessages.tooLarge;
+      case "network":
+        return errorMessages.network;
       default:
         return errorMessages.generic;
     }
@@ -52,43 +54,10 @@ export function ImageUploadField({
     setProgress(0);
     setUploading(true);
 
-    // Phone photos are shrunk to 1600px before upload (see shrink-image.ts).
-    const file = await shrinkImage(picked);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload");
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        setProgress(Math.min(95, Math.round((event.loaded / event.total) * 100)));
-      }
-    };
-
-    xhr.onload = () => {
-      setUploading(false);
-      let data: { url?: string; error?: string } = {};
-      try {
-        data = JSON.parse(xhr.responseText);
-      } catch {
-        // fall through to generic error below
-      }
-      if (xhr.status >= 200 && xhr.status < 300 && data.url) {
-        setProgress(100);
-        onChange(data.url);
-      } else {
-        setErrorText(errorMessageForCode(data.error));
-      }
-    };
-
-    xhr.onerror = () => {
-      setUploading(false);
-      setErrorText(errorMessages.network);
-    };
-
-    xhr.send(formData);
+    const result = await uploadImage(picked, setProgress);
+    setUploading(false);
+    if ("error" in result) setErrorText(errorMessageForCode(result.error));
+    else onChange(result.url);
   }
 
   return (

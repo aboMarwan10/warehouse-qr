@@ -23,6 +23,7 @@ const createProductSchema = z
     description: z.string().optional(),
     price: z.number().positive(),
     imageUrl: z.string().url().optional(),
+    images: z.array(z.string().url()).max(8).optional(),
     inStock: z.boolean().optional(),
     onSale: z.boolean().optional(),
     salePrice: z.number().positive().optional(),

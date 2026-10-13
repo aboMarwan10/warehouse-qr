@@ -33,6 +33,8 @@ export type Product = {
   subcategory: Subcategory | null;
   /** "UNIT" or "CARTON" (src/lib/product-unit.ts). */
   unit: string;
+  /** Secondary photos, after the main one (imageUrl). */
+  images: string[];
   /** Set when this product is one option of a card (e.g. one colour). */
   variantGroup: { id: string; name: string } | null;
   variantLabel: string | null;
@@ -74,6 +76,11 @@ export function groupIntoCards(products: Product[]): ShopCardItem[] {
 
 export function optionLabel(product: Product): string {
   return product.variantLabel || product.name;
+}
+
+/** A product's photos: the main one first, then the secondary ones. */
+export function productPhotos(product: Product): string[] {
+  return [product.imageUrl, ...(product.images ?? [])].filter((url): url is string => !!url);
 }
 
 /** The card photo: the chosen option's, else the first option with one. */
@@ -246,6 +253,7 @@ export function ShopCard({
       product={shown}
       title={options[0].variantGroup?.name}
       imageUrl={cardImage(options, selected)}
+      photoCount={productPhotos(selected ?? options.find((o) => o.imageUrl) ?? shown).length}
       price={!selected && !samePrice ? <FromPrice options={options} /> : undefined}
       picker={
         <OptionPicker
@@ -437,6 +445,7 @@ export function ProductCard({
   imageUrl = product.imageUrl,
   price,
   picker,
+  photoCount = productPhotos(product).length,
 }: {
   product: Product;
   quantity: number;
@@ -448,6 +457,8 @@ export function ProductCard({
   imageUrl?: string | null;
   price?: ReactNode;
   picker?: ReactNode;
+  /** How many photos the details window has; 2+ shows a camera badge. */
+  photoCount?: number;
 }) {
   const { t } = useLocale();
   const percentOff = getSalePercentOff(product);
@@ -469,6 +480,16 @@ export function ProductCard({
         {percentOff !== null && (
           <span className="absolute top-1.5 start-1.5 z-10 bg-[#b3402e] text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">
             -{percentOff}%
+          </span>
+        )}
+        {photoCount > 1 && (
+          // More photos in the details window ("פרטים").
+          <span
+            aria-label={t("catalog.morePhotos", { count: photoCount })}
+            className="absolute bottom-1.5 end-1.5 z-10 flex items-center gap-1 bg-[#1a1714]/70 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5"
+          >
+            <CameraIcon className="w-3 h-3" />
+            {photoCount}
           </span>
         )}
         {imageUrl ? (
@@ -530,7 +551,11 @@ export function ProductDetailModal({
 }) {
   const hasOptions = options.length > 1;
   const title = hasOptions ? product.variantGroup?.name ?? product.name : product.name;
-  const imageUrl = hasOptions ? cardImage(options, product) : product.imageUrl;
+  // The chosen product's photos; an option without its own falls back to the
+  // card's photo.
+  const ownPhotos = productPhotos(product);
+  const fallback = hasOptions ? cardImage(options, product) : null;
+  const photos = ownPhotos.length > 0 ? ownPhotos : fallback ? [fallback] : [];
   const { t } = useLocale();
 
   useEffect(() => {
@@ -566,22 +591,8 @@ export function ProductDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
-          <div
-            className={`aspect-square max-h-[45dvh] w-full flex items-center justify-center overflow-hidden p-6 rounded-t-2xl ${
-              imageUrl ? "bg-white" : "bg-[#f2efe9]"
-            }`}
-          >
-            {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={optimizedImage(imageUrl, "DETAIL")}
-                alt={title}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <PackageIcon className="w-16 h-16 text-[#c5bdb1]" />
-            )}
-          </div>
+          {/* Keyed by product: switching option starts at its first photo. */}
+          <PhotoGallery key={product.id} photos={photos} alt={title} />
           <button
             onClick={onClose}
             aria-label={t("checkout.close")}
@@ -629,5 +640,195 @@ export function ProductDetailModal({
         </div>
       </div>
     </div>
+  );
+}
+
+// Auto-play for the details window's photos, like the home page's sale
+// carousel: next photo every few seconds (looping), paused while the buyer
+// swipes / taps and for a while after.
+const GALLERY_AUTOPLAY_MS = 5000;
+const GALLERY_RESUME_AFTER_MS = 7000;
+// How long one slide takes: slower for the slideshow, a bit quicker when the
+// buyer taps a thumbnail or arrow.
+const GALLERY_AUTO_SLIDE_MS = 900;
+const GALLERY_TAP_SLIDE_MS = 500;
+
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/**
+ * Slides a scroll-snap row to photo `index` with an eased animation (the
+ * browser's own smooth scroll is quick and can't be slowed). Snapping is
+ * switched off while animating, or it would fight every frame. In RTL the
+ * row scrolls toward negative scrollLeft. Returns a cancel function.
+ */
+function slideTo(el: HTMLElement, index: number, duration: number): () => void {
+  const rtl = getComputedStyle(el).direction === "rtl";
+  const from = el.scrollLeft;
+  const to = (rtl ? -1 : 1) * index * el.clientWidth;
+  if (Math.abs(to - from) < 1) return () => {};
+  const start = performance.now();
+  el.style.scrollSnapType = "none";
+  let frame = requestAnimationFrame(function step(now) {
+    const t = Math.min(1, (now - start) / duration);
+    el.scrollLeft = from + (to - from) * easeInOutCubic(t);
+    if (t < 1) frame = requestAnimationFrame(step);
+    else el.style.scrollSnapType = "";
+  });
+  return () => {
+    cancelAnimationFrame(frame);
+    el.style.scrollSnapType = "";
+  };
+}
+
+// The details window's photos: swipe between them (scroll-snap, so it feels
+// native on phones), dots for where you are, thumbnails to jump, arrows on
+// larger screens, and auto-play. A single photo (or none) shows as before.
+function PhotoGallery({ photos, alt }: { photos: string[]; alt: string }) {
+  const { t } = useLocale();
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [index, setIndex] = useState(0);
+  const indexRef = useRef(0);
+  const lastInteractionRef = useRef(0);
+  const cancelSlideRef = useRef<() => void>(() => {});
+  const frame = "aspect-square max-h-[45dvh] w-full rounded-t-2xl";
+
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+
+  useEffect(() => {
+    if (photos.length < 2) return;
+    // Respect "reduce motion": no slideshow, manual only.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      if (Date.now() - lastInteractionRef.current < GALLERY_RESUME_AFTER_MS) return;
+      const el = scrollerRef.current;
+      if (!el) return;
+      cancelSlideRef.current();
+      cancelSlideRef.current = slideTo(el, (indexRef.current + 1) % photos.length, GALLERY_AUTO_SLIDE_MS);
+    }, GALLERY_AUTOPLAY_MS);
+    return () => {
+      clearInterval(timer);
+      cancelSlideRef.current();
+    };
+  }, [photos.length]);
+
+  // A touch stops any slide in progress, so the finger takes over smoothly.
+  const markInteraction = () => {
+    lastInteractionRef.current = Date.now();
+    cancelSlideRef.current();
+  };
+
+  if (photos.length === 0) {
+    return (
+      <div className={`${frame} flex items-center justify-center bg-[#f2efe9]`}>
+        <PackageIcon className="w-16 h-16 text-[#c5bdb1]" />
+      </div>
+    );
+  }
+  if (photos.length === 1) {
+    return (
+      <div className={`${frame} flex items-center justify-center overflow-hidden p-6 bg-white`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={optimizedImage(photos[0], "DETAIL")} alt={alt} className="w-full h-full object-contain" />
+      </div>
+    );
+  }
+
+  function goTo(next: number) {
+    markInteraction();
+    const el = scrollerRef.current;
+    if (el) cancelSlideRef.current = slideTo(el, next, GALLERY_TAP_SLIDE_MS);
+  }
+
+  return (
+    <div>
+      <div className="relative bg-white rounded-t-2xl">
+        <div
+          ref={scrollerRef}
+          // A finger or mouse on the photos pauses the slideshow.
+          onPointerDown={markInteraction}
+          onTouchStart={markInteraction}
+          onWheel={markInteraction}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            // RTL scrollLeft is negative in most browsers; the size of the
+            // offset is what counts.
+            setIndex(Math.round(Math.abs(el.scrollLeft) / el.clientWidth));
+          }}
+          className={`${frame} flex overflow-x-auto snap-x snap-mandatory overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
+        >
+          {photos.map((url, i) => (
+            <div key={url} className="w-full h-full shrink-0 snap-center p-6 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={optimizedImage(url, "DETAIL")}
+                alt={`${alt} (${i + 1}/${photos.length})`}
+                loading={i === 0 ? "eager" : "lazy"}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => goTo(Math.max(0, index - 1))}
+          disabled={index === 0}
+          aria-label={t("catalog.prevPhoto")}
+          className="hidden sm:flex absolute top-1/2 -translate-y-1/2 start-2 w-9 h-9 rounded-full bg-white/95 shadow text-[#1a1714] items-center justify-center disabled:opacity-0"
+        >
+          {/* RTL: "previous" is to the right */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => goTo(Math.min(photos.length - 1, index + 1))}
+          disabled={index === photos.length - 1}
+          aria-label={t("catalog.nextPhoto")}
+          className="hidden sm:flex absolute top-1/2 -translate-y-1/2 end-2 w-9 h-9 rounded-full bg-white/95 shadow text-[#1a1714] items-center justify-center disabled:opacity-0"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <div className="absolute bottom-2 inset-x-0 flex justify-center gap-1.5" aria-hidden>
+          {photos.map((url, i) => (
+            <span
+              key={url}
+              className={`h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-[var(--accent)]" : "w-1.5 bg-[#1a1714]/25"}`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="flex gap-2 px-[18px] pt-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {photos.map((url, i) => (
+          <button
+            key={url}
+            type="button"
+            onClick={() => goTo(i)}
+            aria-label={t("catalog.photoN", { n: i + 1 })}
+            aria-current={i === index ? "true" : undefined}
+            className={`w-14 h-14 shrink-0 rounded-[10px] border-2 bg-white p-1 ${
+              i === index ? "border-[var(--accent)]" : "border-[#eae5dc]"
+            }`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={optimizedImage(url, "THUMB")} alt="" className="w-full h-full object-contain" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <circle cx="12" cy="13" r="3" />
+    </svg>
   );
 }

@@ -15,6 +15,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { Spinner, useToast } from "@/components/toast";
 import { optimizedImage } from "@/lib/image-url";
 import { LOW_STOCK_THRESHOLD, PRODUCT_UNIT, asProductUnit } from "@/lib/product-unit";
+import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 
 type Category = {
   id: string;
@@ -160,6 +161,10 @@ export default function AdminProductsPage() {
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [subcatsOpen, setSubcatsOpen] = useState(false);
+  // Desktop lays the page out as side-by-side cards: the subcategories and
+  // add-product cards are always open instead of tap-to-open sections.
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const showSubcats = subcatsOpen || isDesktop;
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCategoryIds, setEditCategoryIds] = useState<string[]>([]);
@@ -644,13 +649,96 @@ export default function AdminProductsPage() {
   );
   const listFiltered = searchQuery.trim() !== "" || listFilter.categoryId !== "" || lowStockOnly;
 
+  // The add-product form: inline (tap to open) on phones, its own card on desktop.
+  function renderAddForm(className: string) {
+    return (
+      <form onSubmit={addProduct} className={className}>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_130px] gap-2.5">
+          <input
+            type="text"
+            placeholder={t("admin.products.namePlaceholder")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
+          />
+          <CategoryMultiSelect
+            categories={categories}
+            selectedIds={categoryIds}
+            onChange={(ids) => {
+              setCategoryIds(ids);
+              if (!subcategories.some((s) => s.id === subcategoryId && ids.includes(s.categoryId))) {
+                setSubcategoryId("");
+              }
+            }}
+            placeholder={t("admin.products.noCategoryOption")}
+          />
+          <input
+            type="number"
+            step="0.01"
+            placeholder={t("admin.products.pricePlaceholder")}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
+          />
+        </div>
+        {categoryIds.length > 0 && subcategories.some((s) => categoryIds.includes(s.categoryId)) && (
+          <select
+            value={subcategoryId}
+            onChange={(e) => setSubcategoryId(e.target.value)}
+            className="w-full border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
+          >
+            <option value="">{t("admin.products.noSubcategoryOption")}</option>
+            {subcategories
+              .filter((s) => categoryIds.includes(s.categoryId))
+              .map((subcategory) => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+          </select>
+        )}
+        <input
+          type="text"
+          placeholder={t("admin.products.descriptionPlaceholder")}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="w-full border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
+        />
+        <UnitStockFields unit={unit} onUnitChange={setUnit} stock={stock} onStockChange={setStock} />
+        <ProductImagesField
+          main={imageUrl}
+          extras={images}
+          onChange={(main, extras) => {
+            setImageUrl(main);
+            setImages(extras);
+          }}
+        />
+        <div className="flex items-center gap-3.5 flex-wrap">
+          <button
+            type="submit"
+            className="ms-auto bg-[var(--accent)] text-white rounded-[10px] px-5 py-2.5 text-sm font-semibold"
+          >
+            {t("admin.products.addProduct")}
+          </button>
+        </div>
+        {error && <p className="text-sm text-[#b3402e]">{error}</p>}
+      </form>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-4 space-y-[22px]">
-      <div>
-        <h1 className="text-xl font-bold text-[#1a1714] mb-4">
+    // Phones: one column. Desktop (lg): categories on one side, subcategories
+    // and add-product stacked on the other, then the products card.
+    <div className="mx-auto max-w-3xl lg:max-w-7xl px-4 py-4 lg:px-8 lg:py-6 space-y-[22px]">
+      <h1 className="hidden lg:block text-2xl font-bold text-[#1a1714]">{t("admin.products.productsTitle")}</h1>
+
+      <div className="space-y-[22px] lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-[22px]">
+      <div className="lg:bg-white lg:border lg:border-[#eae5dc] lg:rounded-[14px]">
+        <h1 className="text-xl font-bold text-[#1a1714] mb-4 lg:mb-0 lg:text-base lg:px-[18px] lg:py-3.5 lg:border-b lg:border-[#eae5dc]">
           {t("admin.products.categoriesTitle")}
         </h1>
 
+        <div className="lg:p-[18px]">
         <form onSubmit={addCategory} className="flex gap-2 mb-3">
           <input
             type="text"
@@ -704,26 +792,31 @@ export default function AdminProductsPage() {
             </div>
           )}
         />
+        </div>
       </div>
 
-      {/* Collapsed by default; the header opens it. */}
+      {/* Desktop: both columns end at the same line (the grid stretches the
+          categories card; the add-product card fills any leftover height). */}
+      <div className="space-y-[22px] lg:space-y-0 lg:flex lg:flex-col lg:gap-[22px]">
+      {/* Phones: collapsed by default, the header opens it. Desktop: always open. */}
       <div className="bg-white border border-[#eae5dc] rounded-[14px]">
         <button
           type="button"
           onClick={() => setSubcatsOpen((open) => !open)}
-          aria-expanded={subcatsOpen}
-          className="w-full flex items-center justify-between gap-3 px-[18px] py-3.5 text-start"
+          aria-expanded={showSubcats}
+          disabled={isDesktop}
+          className="w-full flex items-center justify-between gap-3 px-[18px] py-3.5 text-start lg:cursor-default lg:border-b lg:border-[#eae5dc]"
         >
           <span>
             <span className="block text-base font-bold text-[#1a1714]">{t("admin.products.subcategoriesTitle")}</span>
             <span className="block text-[13px] text-[#8a8177]">{t("admin.products.subcategoriesHint")}</span>
           </span>
           <ChevronDownIcon
-            className={`w-5 h-5 shrink-0 text-[#6b6259] transition-transform ${subcatsOpen ? "rotate-180" : ""}`}
+            className={`w-5 h-5 shrink-0 text-[#6b6259] transition-transform lg:hidden ${subcatsOpen ? "rotate-180" : ""}`}
           />
         </button>
-        {subcatsOpen && (
-          <div className="px-[18px] pb-[18px]">
+        {showSubcats && (
+          <div className="px-[18px] pb-[18px] lg:pt-[18px]">
             {/* Everything for subcategories in one place: add, delete, drag to
                 reorder, and open one to arrange its products. */}
             <ProductOrderSection
@@ -743,14 +836,27 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      <div>
-        <h1 className="text-xl font-bold text-[#1a1714] mb-4">
+      {isDesktop && (
+        <div className="flex-1 bg-white border border-[#eae5dc] rounded-[14px]">
+          <h2 className="text-base font-bold text-[#1a1714] px-[18px] py-3.5 border-b border-[#eae5dc]">
+            {t("admin.products.addProductToggle")}
+          </h2>
+          {renderAddForm("p-[18px] space-y-2.5")}
+        </div>
+      )}
+      </div>
+      </div>
+
+      <div className="lg:bg-white lg:border lg:border-[#eae5dc] lg:rounded-[14px] lg:p-[18px]">
+        {/* Desktop shows this title in the page header instead. */}
+        <h1 className="text-xl font-bold text-[#1a1714] mb-4 lg:hidden">
           {t("admin.products.productsTitle")}
         </h1>
 
-        {/* Collapsed by default so the product list and search are what you see
-            first; the arrow opens the add-product form. */}
-        <div className="bg-white border border-[#eae5dc] rounded-[14px] mb-4">
+        {/* Phones only (desktop has its own add-product card). Collapsed
+            by default so the product list and search are what you see first;
+            the arrow opens the add-product form. */}
+        <div className="bg-white border border-[#eae5dc] rounded-[14px] mb-4 lg:hidden">
           <button
             type="button"
             onClick={() => setAddOpen((open) => !open)}
@@ -760,92 +866,20 @@ export default function AdminProductsPage() {
             {t("admin.products.addProductToggle")}
             <ChevronDownIcon className={`w-5 h-5 text-[#6b6259] transition-transform ${addOpen ? "rotate-180" : ""}`} />
           </button>
-          {addOpen && (
-            <form
-              onSubmit={addProduct}
-              className="px-[18px] pb-[18px] pt-1 space-y-2.5"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_130px] gap-2.5">
-                <input
-                  type="text"
-                  placeholder={t("admin.products.namePlaceholder")}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
-                />
-                <CategoryMultiSelect
-                  categories={categories}
-                  selectedIds={categoryIds}
-                  onChange={(ids) => {
-                    setCategoryIds(ids);
-                    if (!subcategories.some((s) => s.id === subcategoryId && ids.includes(s.categoryId))) {
-                      setSubcategoryId("");
-                    }
-                  }}
-                  placeholder={t("admin.products.noCategoryOption")}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder={t("admin.products.pricePlaceholder")}
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
-                />
-              </div>
-              {categoryIds.length > 0 && subcategories.some((s) => categoryIds.includes(s.categoryId)) && (
-                <select
-                  value={subcategoryId}
-                  onChange={(e) => setSubcategoryId(e.target.value)}
-                  className="w-full border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
-                >
-                  <option value="">{t("admin.products.noSubcategoryOption")}</option>
-                  {subcategories
-                    .filter((s) => categoryIds.includes(s.categoryId))
-                    .map((subcategory) => (
-                      <option key={subcategory.id} value={subcategory.id}>
-                        {subcategory.name}
-                      </option>
-                    ))}
-                </select>
-              )}
-              <input
-                type="text"
-                placeholder={t("admin.products.descriptionPlaceholder")}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border border-[#e6e0d6] rounded-[10px] px-3.5 py-2.5"
-              />
-              <UnitStockFields unit={unit} onUnitChange={setUnit} stock={stock} onStockChange={setStock} />
-              <ProductImagesField
-                main={imageUrl}
-                extras={images}
-                onChange={(main, extras) => {
-                  setImageUrl(main);
-                  setImages(extras);
-                }}
-              />
-              <div className="flex items-center gap-3.5 flex-wrap">
-                <button
-                  type="submit"
-                  className="ms-auto bg-[var(--accent)] text-white rounded-[10px] px-5 py-2.5 text-sm font-semibold"
-                >
-                  {t("admin.products.addProduct")}
-                </button>
-              </div>
-              {error && <p className="text-sm text-[#b3402e]">{error}</p>}
-            </form>
-          )}
+          {addOpen && !isDesktop && renderAddForm("px-[18px] pb-[18px] pt-1 space-y-2.5")}
         </div>
 
+        {/* Desktop: one full-width toolbar row; search fills the space and the
+            filters sit at the far end, checkbox before the category dropdown. */}
+        <div className="lg:flex lg:items-center lg:gap-3 lg:mb-3">
         <input
           type="search"
           placeholder={t("admin.products.searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full border border-[#e6e0d6] bg-white rounded-[10px] px-3.5 py-2.5 mb-2"
+          className="w-full border border-[#e6e0d6] bg-white rounded-[10px] px-3.5 py-2.5 mb-2 lg:mb-0 lg:w-auto lg:flex-1"
         />
-        <div className="mb-2">
+        <div className="mb-2 lg:mb-0 lg:order-2">
           <CategoryFilter
             categories={categories}
             subcategories={subcategories}
@@ -853,7 +887,7 @@ export default function AdminProductsPage() {
             onChange={setListFilter}
           />
         </div>
-        <label className="flex items-center gap-2 text-[13px] font-medium text-[#4a443c] mb-2 w-fit">
+        <label className="flex items-center gap-2 text-[13px] font-medium text-[#4a443c] mb-2 lg:mb-0 lg:order-1 w-fit shrink-0">
           <input
             type="checkbox"
             checked={lowStockOnly}
@@ -862,6 +896,7 @@ export default function AdminProductsPage() {
           />
           {t("admin.products.lowStockOnly", { threshold: LOW_STOCK_THRESHOLD })}
         </label>
+        </div>
         {listFiltered && !loading && (
           <p className="text-[13px] text-[#8a8177] mb-3">
             {t("admin.products.filterMatches", { count: filteredProducts.length, total: products.length })}
@@ -881,7 +916,7 @@ export default function AdminProductsPage() {
               : t("catalog.noProductsMatchFilter")}
           </p>
         ) : (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredProducts.map((product) => {
               const subcategory = subcategories.find((s) => s.id === product.subcategoryId);
               return (

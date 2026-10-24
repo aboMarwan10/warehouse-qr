@@ -253,7 +253,10 @@ export function StorefrontShell({ children }: { children: React.ReactNode }) {
             className="border-t border-[#eae5dc] bg-white px-4 py-7 mt-4 text-center scroll-mt-24"
           >
             <p className="text-sm font-semibold text-[#1a1714] mb-1">{WAREHOUSE_NAME}</p>
-            <p className="text-[13px] text-[#6b6259] mb-3.5">{t("catalog.contactQuestion")}</p>
+            {/* Developer credit: always English, left-to-right, on every locale. */}
+            <p dir="ltr" lang="en" className="text-[13px] text-[#6b6259] mb-3.5">
+              Developed By Funoon
+            </p>
             <div className="flex items-center justify-center gap-2.5">
               <a
                 href={`tel:+${WAREHOUSE_CONTACT_PHONE}`}
